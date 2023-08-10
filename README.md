@@ -56,8 +56,3 @@ The purpose of this spider is to gather additional information about vacation re
 
 - These spiders are designed for educational and informational purposes. Always review and adhere to the website's terms of use and scraping guidelines.
 - Be prepared to adapt the spiders if TripAdvisor's website structure changes.
-- Safeguard your personal information, such as MongoDB connection details.
-
-## Legal Disclaimer
-
-This project is intended for educational purposes only. Use the spiders responsibly and in accordance with the terms of use of the websites you scrape. The creators of this project are not responsible for any misuse or legal issues arising from the use of these spiders.
