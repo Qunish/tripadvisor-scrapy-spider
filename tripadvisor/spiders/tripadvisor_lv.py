@@ -1,14 +1,21 @@
 import scrapy
 from selenium.webdriver.common.by import By
 import pymongo
-from selenium import webdriver
 from ..items import TripadvisorItem_LV
+import random
 
 DRIVER_FILE_PATH = "/Users/qunishdash/Documents/chromedriver_mac64/chromedriver"
+USER_AGENT_LIST = ['Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36',
+                    'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:86.0) Gecko/20100101 Firefox/86.0',
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.13; rv:72.0) Gecko/20100101 Firefox/72.0',
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36',
+                    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/81.0.4044.129 Safari/537.36'
+                    ]
 
 class TripadvisorLvSpider(scrapy.Spider):
     name = "tripadvisor_lv"
     handle_httpstatus_list = [403]
+    page_number = 1
     start_urls = ["https://www.tripadvisor.in/VacationRentals-g298184-Reviews-Tokyo_Tokyo_Prefecture_Kanto-Vacation_Rentals.html"]
 
     def __init__(self):
@@ -20,19 +27,28 @@ class TripadvisorLvSpider(scrapy.Spider):
         self.collection = db["tokyo_lv"]
 
     def get_chrome_driver(self, headless_flag):
-        chrome_options = webdriver.ChromeOptions()
-
+        from selenium import webdriver
+        from selenium.webdriver.chrome.options import Options
         if headless_flag:
+            # in case you want headless browser
+            chrome_options = Options()
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--disable-extensions")
             chrome_options.add_argument("--disable-gpu")
             chrome_options.add_argument("--no-sandbox")
             chrome_options.add_argument("--start-maximized")
+            # chrome_options.add_experimental_option('prefs', {'headers': headers}) # if you want to add custom header
+            chrome_options.add_argument("user-agent={}".format(random.choice(USER_AGENT_LIST)))
+            driver = webdriver.Chrome(options=chrome_options) 
         else:
+            # in case  you want to open browser
+            chrome_options = Options()
+            # chrome_options.add_experimental_option('prefs', {'headers': headers}) # if you want to add custom header
             chrome_options.add_argument("--start-maximized")
+            chrome_options.add_argument("user-agent={}".format(random.choice(USER_AGENT_LIST)))
             chrome_options.headless = False
+            driver = webdriver.Chrome(options=chrome_options)
 
-        driver = webdriver.Chrome(options=chrome_options) 
         return driver
 
     def parse(self, response):
@@ -52,17 +68,14 @@ class TripadvisorLvSpider(scrapy.Spider):
                 name = card.find_element(By.CSS_SELECTOR, ".S7").text
             except Exception as e:
                 name = ''
-                print("Exception",e)
             try:
                 type_of_property = card.find_element(By.CSS_SELECTOR, ".oXJmt").text
             except Exception as e:
                 type_of_property = ''
-                print("Exception",e)
             try:
                 number_of_bedrooms = card.find_element(By.CSS_SELECTOR, ".kkHNg .qkjPI").text
             except Exception as e:
                 number_of_bedrooms = ''
-                print("Exception",e)
             try:
                 number_of_bathrooms = card.find_element(By.CSS_SELECTOR, ".WIPQs .qkjPI").text
             except Exception as e:
@@ -76,7 +89,7 @@ class TripadvisorLvSpider(scrapy.Spider):
             except Exception as e:
                 number_of_reviews = ''
             try:
-                url = card.find_element(By.CSS_SELECTOR, ".fullwidth").get_attribute("href")
+                url = card.find_element(By.CSS_SELECTOR, ".S7 a").get_attribute("href")
             except Exception as e:
                 url = ''
             try:
@@ -84,16 +97,25 @@ class TripadvisorLvSpider(scrapy.Spider):
             except Exception as e:
                 image_url = ''
 
-            items["name"]: name
-            items["type_of_property"]: type_of_property
-            items["number_of_bedrooms"]: number_of_bedrooms
-            items["number_of_bathrooms"]: number_of_bathrooms
-            items["number_of_guests_allowed"]: number_of_guests_allowed
-            items["number_of_reviews"]: number_of_reviews
-            items["url"]: url
-            items["image_url"]: image_url
+            items["name"] = name
+            items["type_of_property"] = type_of_property
+            items["number_of_bedrooms"] = number_of_bedrooms
+            items["number_of_bathrooms"] = number_of_bathrooms
+            items["number_of_guests_allowed"] = number_of_guests_allowed
+            items["number_of_reviews"] = number_of_reviews
+            items["url"] = url
+            items["image_url"] = image_url
+
+            if any(items.values()):
+                self.collection.insert_one(dict(items))
 
             yield items
 
-        driver.quit()
+        next_page_offset = self.page_number * 50
+        # Generate the next page URL
+        next_page_url = f'https://www.tripadvisor.in/VRACSearch-g298184-Reviews-Tokyo_Tokyo_Prefecture_Kanto-Vacation_Rentals.html?oa={next_page_offset}'
+        if self.page_number < 4:
+            self.page_number += 1
+            yield scrapy.Request(next_page_url, callback=self.parse)
 
+        driver.quit()
